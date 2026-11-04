@@ -1,3 +1,5 @@
+using Test
+
 function getbit(num::Int, pos::Int)
     num>>pos % 2
 end
@@ -38,3 +40,24 @@ end
 function f2(s::Int)
     (getbit(s, 2) | getbit(s, 1))*4 + (getbit(s, 2) & (getbit(s, 0) ⊻ 1))*2 + (getbit(s, 2) & getbit(s, 1))
 end
+
+@testset "f1 cycles" begin
+    @test findcycle(0, f1) == (0, 6, [0, 1, 5, 7, 6, 2])
+    @test findcycle(6, f1) == (0, 6, [0, 1, 5, 7, 6, 2])
+    @test findcycle(3, f1) == (0, 2, [3, 4])
+    @test findcycle(4, f1) == (0, 2, [3, 4])
+end
+
+@testset "f2 cycles" begin
+    @test findcycle(0, f2) == (0, 1, [0])
+    @test findcycle(1, f2) == (1, 1, [0])
+    @test findcycle(4, f2) == (0, 4, [4, 6, 7, 5])
+    @test findcycle(7, f2) == (0, 4, [4, 6, 7, 5])
+    @test findcycle(2, f2) == (1, 4, [4, 6, 7, 5])
+end
+
+@testset "attractors" begin
+    @test getattractors(3, f1) == Set([[3, 4], [0, 1, 5, 7, 6, 2]])
+    @test getattractors(3, f2) == Set([[0], [4, 6, 7, 5]])
+end
+

@@ -22,6 +22,15 @@ function findcycle(state::Int, statefunc)
     end
 end
 
+function getattractors(N::Int, f)
+    attractors = Set{Vector{Int}}()
+    for k in 0:2^N-1
+        _, _, att = findcycle(k, f)
+        push!(attractors, att)
+    end
+    return attractors
+end
+
 function f1(s::Int) 
     getbit(s, 0)*4 + getbit(s, 2)*2 + (getbit(s, 1) ⊻ 1)
 end

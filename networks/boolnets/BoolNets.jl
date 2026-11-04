@@ -1,6 +1,8 @@
 module BoolNets
 
-export BoolNet, getbit, nextstate, findcycle, getbasins
+using Random
+
+export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet
 
 
 """
@@ -103,6 +105,27 @@ end
 function getbasins(net::BoolNet)
     N = length(net.inputs)
     return getbasins(N, s->nextstate(s, net))
+end
+
+"""
+Generate a random Boolean network using the NK model
+with `N` genes where each gene receives input from `K` distinct genes.
+"""
+function randomnet(N::Int, K::Int, rng::AbstractRNG=Random.default_rng())
+    1 ≤ K ≤ N || throw(ArgumentError("K must be between 1 and N"))
+
+    inputs = Vector{Vector{Int}}(undef, N)
+    tables = Vector{Vector{Int}}(undef, N)
+
+    num_entries = 1 << K # = 2^K
+
+    for i in 1:N 
+        # Randomly choose K distinct genes and populate the truth table
+        inputs[i] = randperm(rng, N)[1:K]
+        tables[i] = rand(rng, 0:1, num_entries)
+    end
+
+    return BoolNet(inputs, tables)
 end
 
 end # module

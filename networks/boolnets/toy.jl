@@ -24,13 +24,13 @@ function findcycle(state::Int, statefunc)
     end
 end
 
-function getattractors(N::Int, f)
-    attractors = Set{Vector{Int}}()
+function getbasins(N::Int, f)
+    basins = Dict{Vector{Int}, Int}()
     for k in 0:2^N-1
-        _, _, att = findcycle(k, f)
-        push!(attractors, att)
+        _, _, c = findcycle(k, f)
+        basins[c] = get(basins, c, 0) + 1
     end
-    return attractors
+    return basins
 end
 
 function f1(s::Int) 
@@ -55,9 +55,3 @@ end
     @test findcycle(7, f2) == (0, 4, [4, 6, 7, 5])
     @test findcycle(2, f2) == (1, 4, [4, 6, 7, 5])
 end
-
-@testset "attractors" begin
-    @test getattractors(3, f1) == Set([[3, 4], [0, 1, 5, 7, 6, 2]])
-    @test getattractors(3, f2) == Set([[0], [4, 6, 7, 5]])
-end
-

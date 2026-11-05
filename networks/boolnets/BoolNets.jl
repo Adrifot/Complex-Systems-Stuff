@@ -52,7 +52,7 @@ function nextstate(state::Int, net::BoolNet)
         pos = 1
         pow = length(net.inputs[gene]) -1
         for i in net.inputs[gene]
-            pos += getbit(state, N - i) * 2^pow
+            pos += getbit(state, N - i) * 1<<pow
             pow -= 1
         end
         res += net.tables[gene][pos] * 2^(N - gene)

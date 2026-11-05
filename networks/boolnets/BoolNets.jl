@@ -2,8 +2,9 @@ module BoolNets
 
 using Random
 
-export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz
+using GraphViz
 
+export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, plot_topology, plot_statediagram, save_graph, analyze
 
 """
     BoolNet(inputs, tables)
@@ -108,6 +109,8 @@ function getbasins(net::BoolNet)
 end
 
 """
+    randomnet(N, K, rng) -> BoolNet
+
 Generate a random Boolean network using the NK model
 with `N` genes where each gene receives input from `K` distinct genes.
 """
@@ -232,6 +235,92 @@ function watts_strogatz(N::Int, k::Int, p::Float64, rng::AbstractRNG=Random.defa
     tables = [rand(rng, 0:1, 1 << length(inputs[i])) for i in 1:N]
 
     return BoolNet(inputs, tables)
+end
+
+
+"""
+    plot_topology(net::BoolNet) -> GraphViz.Graph
+
+Render the gene-interaction graph of `net`. Edges point from input genes to target genes.
+"""
+function plot_topology(net::BoolNet)
+    N = length(net.inputs)
+    dot = "digraph BoolNetTopology {\n"
+    dot *= "  node [shape=circle, style=filled, fillcolor=\"#E3F2FD\", fontname=\"Helvetica\"];\n"
+    dot *= "  edge [color=\"#555555\", arrowhead=vee];\n"
+
+    for gene in 1:N
+        for input_gene in net.inputs[gene]
+            dot *= "  $input_gene -> $gene;\n"
+        end
+    end
+    dot *= "}\n"
+
+    return dot
+end
+
+
+"""
+    plot_statediagram(net::BoolNet) -> GraphViz.Graph
+
+Render the state-transition diagram across all 2^N states. 
+Attractor states and cycles are highlighted in coral.
+"""
+function plot_statediagram(net::BoolNet)
+    N = length(net.inputs)
+    num_states = 1 << N
+
+    fmt_state(s) = string(s, base=2, pad=N)
+
+    basins = getbasins(net)
+    attractors = Set{Int}()
+    for (cycle, _) in basins
+        union!(attractors, cycle)
+    end
+
+    dot = "digraph StateSpace {\n"
+    dot *= "  rankdir=LR;\n"
+    dot *= "  node [fontname=\"Courier\", shape=box, style=rounded];\n"
+
+    for s in 0:(num_states - 1)
+        if s in attractors
+            dot *= "  \"$(fmt_state(s))\" [style=\"rounded,filled\", fillcolor=\"#FFCDD2\", color=\"#D32F2F\", penwidth=2.0];\n"
+        else
+            dot *= "  \"$(fmt_state(s))\" [style=\"rounded,filled\", fillcolor=\"#F5F5F5\", color=\"#BDBDBD\"];\n"
+        end
+    end
+
+    for s in 0:(num_states - 1)
+        ns = nextstate(s, net)
+        edge_color = (s in attractors && ns in attractors) ? "#D32F2F" : "#757575"
+        dot *= "  \"$(fmt_state(s))\" -> \"$(fmt_state(ns))\" [color=\"$edge_color\"];\n"
+    end
+
+    dot *= "}\n"
+
+    return dot # Return raw String directly
+end
+
+
+function save_graph(dot_str::String, filename="graph.png")
+    ext = splitext(filename)[2][2:end] # extracts "png" or "svg"
+    
+    # Pipe raw dot string to dot command
+    cmd = `dot -T$ext -o $filename`
+    open(cmd, "w", stdout) do io
+        print(io, dot_str)
+    end
+    
+    return filename
+end
+
+
+function analyze(net::BoolNet, savefile::String)
+    print(getbasins(net))
+    g = plot_topology(net)
+    s = plot_statediagram(net)
+    save_graph(g, "$(savefile)_topology.png")
+    save_graph(s, "$(savefile)_state_diagram.png")
 end
 
 end # module

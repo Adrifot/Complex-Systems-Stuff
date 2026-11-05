@@ -2,7 +2,7 @@ module BoolNets
 
 using Random
 
-export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet
+export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz
 
 
 """
@@ -124,6 +124,112 @@ function randomnet(N::Int, K::Int, rng::AbstractRNG=Random.default_rng())
         inputs[i] = randperm(rng, N)[1:K]
         tables[i] = rand(rng, 0:1, num_entries)
     end
+
+    return BoolNet(inputs, tables)
+end
+
+
+"""
+    erdos_renyi(N, p, rng) -> BoolNet
+    erdos_renyi(N, m, rng) -> BoolNet
+
+Generate an Erdos-Renyi-like boolean network of `N` nodes with link probability `p`.
+OR 
+Generate an Erdos-Renyi-like boolean network of `N` nodes with `m` edges.
+
+Self-loops allowed.
+"""
+function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
+    0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability and should be between 0 and 1."))
+
+    inputs = Vector{Vector{Int}}(undef, N)
+    tables = Vector{Vector{Int}}(undef, N)
+
+    for node in 1:N
+        gene_inputs = [i for i in 1:N if rand(rng) < p]
+        if isempty(gene_inputs) gene_inputs = [node] end
+        inputs[node] = gene_inputs
+        K = length(gene_inputs)
+        tables[node] = rand(rng, 0:1, 1<<K)
+    end
+
+    return BoolNet(inputs, tables)
+end
+
+function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng())
+    0 ≤ m ≤ N^2 || throw(ArgumentError("m is too big. With the provided N = $N, maximum value is m = $(N^2-1)"))
+
+    inputs = Vector{Vector{Int}}(undef, N)
+    tables = Vector{Vector{Int}}(undef, N)
+
+    inputs = [Int[] for _ in 1:N]
+    tables = Vector{Vector{Int}}(undef, N)
+
+    # pick m distinct edges out of the N^2 possible ones
+    for idx in Random.randperm(rng, N^2)[1:m]
+        q, r = divrem(idx-1, N)
+        node = q + 1
+        input = r + 1
+        push!(inputs[node], input)
+    end
+
+    for node in 1:N
+        isempty(inputs[node]) && push!(inputs[node], node) # if no connections, make self-loop
+        sort!(inputs[node])
+        K = length(inputs[node])
+        tables[node] = rand(rng, 0:1, 1<<K)
+    end
+    return BoolNet(inputs, tables)
+end
+
+
+"""
+    erdos_renyi_k(N, k, rng) -> BoolNet
+
+Generate an Erdos-Renyi-like boolean network with a desired average in-degree `k`
+"""
+function erdos_renyi_k(N::Int, k::Float64, rng::AbstractRNG=Random.default_rng())
+    p = k / N
+    return erdos_renyi(N, p, rng)
+end
+
+
+"""
+    watts_strogatz(N, k, p, rng) -> BoolNet
+
+Generate a Watts-Strogatz small-world random boolean network. 
+Start from a circular 1D lattice of `N` nodes, each connected to its `k` neighbors.
+Then rewire each link with a probability of `p`.
+"""
+function watts_strogatz(N::Int, k::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
+    iseven(k) || throw(ArgumentError("Initial degree k must be even."))
+    0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability, It should be between 0 and 1."))
+
+    # Initial ring lattice
+    inputs = [Int[] for _ in 1:N]
+    halfk = k ÷ 2
+
+    for i in 1:N
+        for offset in -halfk:halfk
+            if offset != 0
+                target = mod1(i + offset, N)
+                push!(inputs[i], target)
+            end
+        end
+    end
+
+    # Rewire the edges
+    for i in 1:N
+        for idx in 1:length(inputs[i])
+            if rand(rng) < p
+                available = setdiff(1:N, inputs[i])
+                if !isempty(available) inputs[i][idx] = rand(rng, available) end
+            end
+        end
+    end
+
+    # Generate truth tables
+    tables = [rand(rng, 0:1, 1 << length(inputs[i])) for i in 1:N]
 
     return BoolNet(inputs, tables)
 end

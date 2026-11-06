@@ -319,8 +319,8 @@ function analyze(net::BoolNet, savefile::String)
     print(getbasins(net))
     g = plot_topology(net)
     s = plot_statediagram(net)
-    save_graph(g, "$(savefile)_topology.png")
-    save_graph(s, "$(savefile)_state_diagram.png")
+    save_graph(g, "./img/$(savefile)_topology.png")
+    save_graph(s, "./img/$(savefile)_state_diagram.png")
 end
 
 end # module

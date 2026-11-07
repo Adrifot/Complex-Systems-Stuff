@@ -2,8 +2,6 @@ module BoolNets
 
 using Random
 
-using GraphViz
-
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
         plot_topology, plot_statediagram, save_graph, analyze,
@@ -102,7 +100,7 @@ function getbasins(N::Int, f)
 
     basins = Dict{Int, Int}()
     for l in v
-        basins[l] = get(basins, l, 0) + 1
+        basins[l-1] = get(basins, l-1, 0) + 1
     end
     return basins
 end
@@ -249,7 +247,7 @@ function getattractors(net::BoolNet)
     f = s -> nextstate(s, net)
     result = Tuple{Vector{Int}, Int}[]
     for (label, basin) in getbasins(N, f)
-        start = label - 1      
+        start = label      
         cycle = [start]
         s = f(start)
         while s != start

@@ -4,7 +4,10 @@ using Random
 
 using GraphViz
 
-export BoolNet, getbit, nextstate, findcycle, getbasins, randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, plot_topology, plot_statediagram, save_graph, analyze
+export BoolNet, getbit, nextstate,  getbasins, 
+        randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
+        plot_topology, plot_statediagram, save_graph, analyze,
+        getattractors
 
 """
     BoolNet(inputs, tables)
@@ -60,55 +63,51 @@ function nextstate(state::Int, net::BoolNet)
     return res
 end
 
-
 """
-    findcycle(state, statefunc) -> (transient length, cycle length, cycle states)
+    getbasins(N, f) -> Dict{Int, Int}
+    getnasins(net) -> Dict{Int, Int}
 
-Follow the trajectory from `state` via `statefunc` until a cycle is found.
-The cycle is returned rotated so it always starts with its smallest state.
-"""
-function findcycle(state::Int, statefunc)
-    step = 0
-    seen = Dict{Int, Int}()
-    states = Vector{Int}()
-    while true
-         if haskey(seen, state)
-            t0 = seen[state]
-            cyclelength = step - t0
-            cyclestates = states[t0+1:end]
-            cycle = circshift(cyclestates, 1-argmin(cyclestates))
-            return (t0, cyclelength, cycle[1])
-        else
-            seen[state] = step 
-            push!(states, state)
-            state = statefunc(state)
-            step += 1
-        end 
-    end
-end
-
-
-"""
-    getbasins(net::BoolNet) -> Dict{attractor => basin size}
-    getbasins(N::Int, f) -> Dict{attractor => basin size}
-
-Return a `Dict{Vector{Int}, {Int}}` containing attractors and their basin sized of `net` 
+Get the basins of each attractor for a given boolean network `net`. Returns a dictionary with `AttractorID => BasinSize` entries.
+Runs in `O(2^N)` time. Consumes `O(2^N)` space. Mind the size of the boolean network.
 """
 function getbasins(N::Int, f)
+    v = zeros(Int, 1<<N)
+    path = Int[]
+
+    for s0 in 0:(1<<N)-1
+        v[s0+1] != 0 && continue
+        empty!(path)
+        s = s0
+        label = 0
+
+        while true
+            val = v[s+1]
+            if val > 0
+                label = val 
+                break
+            elseif val < 0
+                label = s + 1
+                break
+            else
+                push!(path, s)
+                v[s+1] = -1
+                s = f(s)
+            end
+        end
+
+        for t in path
+            v[t+1] = label
+        end
+    end
+
     basins = Dict{Int, Int}()
-    for k in 0:2^N-1
-        _, _, c = findcycle(k, f)
-        basins[c] = get(basins, c, 0) + 1
+    for l in v
+        basins[l] = get(basins, l, 0) + 1
     end
     return basins
 end
 
-function getbasins(net::BoolNet)
-    N = length(net.inputs)
-    return getbasins(N, s->nextstate(s, net))
-end
-
-findbasins = getbasins # bind to the same func
+getbasins(net::BoolNet) = getbasins(length(net.inputs), s -> nextstate(s, net)) 
 
 """
     randomnet(N, K, rng) -> BoolNet
@@ -162,7 +161,7 @@ function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
 end
 
 function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng())
-    0 ≤ m ≤ N^2 || throw(ArgumentError("m is too big. With the provided N = $N, maximum value is m = $(N^2-1)"))
+    0 ≤ m ≤ N^2 || throw(ArgumentError("m is too big. With the provided N = $N, maximum value is m = $(N^2)"))
 
     inputs = Vector{Vector{Int}}(undef, N)
     tables = Vector{Vector{Int}}(undef, N)
@@ -241,88 +240,122 @@ end
 
 
 """
-    plot_topology(net::BoolNet) -> GraphViz.Graph
+    getattractors(net) -> Vector{Tuple{Vector{Int}, Int}}
 
-Render the gene-interaction graph of `net`. Edges point from input genes to target genes.
+Return `(cycle_states, basin_size)` for every attractor of `net`, largest basin first.
+"""
+function getattractors(net::BoolNet)
+    N = length(net.inputs)
+    f = s -> nextstate(s, net)
+    result = Tuple{Vector{Int}, Int}[]
+    for (label, basin) in getbasins(N, f)
+        start = label - 1      
+        cycle = [start]
+        s = f(start)
+        while s != start
+            push!(cycle, s)
+            s = f(s)
+        end
+        push!(result, (cycle, basin))
+    end
+    sort!(result, by = x -> -x[2])
+    return result
+end
+
+fmt_state(s::Int, N::Int) = string(s, base=2, pad=N)
+
+
+"""
+    plot_topology(net::BoolNet) -> String
+
+DOT source for the gene-interaction graph. Edges point from input genes to target genes.
 """
 function plot_topology(net::BoolNet)
     N = length(net.inputs)
-    dot = "digraph BoolNetTopology {\n"
-    dot *= "  node [shape=circle, style=filled, fillcolor=\"#E3F2FD\", fontname=\"Helvetica\"];\n"
-    dot *= "  edge [color=\"#555555\", arrowhead=vee];\n"
-
-    for gene in 1:N
-        for input_gene in net.inputs[gene]
-            dot *= "  $input_gene -> $gene;\n"
-        end
+    io = IOBuffer()
+    println(io, "digraph BoolNetTopology {")
+    println(io, "  node [shape=circle, style=filled, fillcolor=\"#E3F2FD\", fontname=\"Helvetica\"];")
+    println(io, "  edge [color=\"#555555\", arrowhead=vee];")
+    for gene in 1:N, input_gene in net.inputs[gene]
+        println(io, "  $input_gene -> $gene;")
     end
-    dot *= "}\n"
-
-    return dot
+    println(io, "}")
+    return String(take!(io))
 end
 
 
 """
-    plot_statediagram(net::BoolNet) -> GraphViz.Graph
+    plot_statediagram(net::BoolNet; maxN=10) -> String
 
-Render the state-transition diagram across all 2^N states. 
-Attractor states and cycles are highlighted in coral.
+DOT source for the state-transition diagram over all 2^N states.
+Attractor states are highlighted in red. Refuses nets with `N > maxN`.
 """
-function plot_statediagram(net::BoolNet)
+function plot_statediagram(net::BoolNet; maxN::Int=10)
     N = length(net.inputs)
-    num_states = 1 << N
+    N <= maxN || throw(ArgumentError("State diagram has 2^$N nodes; raise maxN if you really want it."))
 
-    fmt_state(s) = string(s, base=2, pad=N)
+    onattractor = Set(Iterators.flatten(first.(getattractors(net))))
 
-    basins = getbasins(net)
-    attractors = Set{Int}()
-    for (cycle, _) in basins
-        union!(attractors, cycle)
-    end
+    io = IOBuffer()
+    println(io, "digraph StateSpace {")
+    println(io, "  rankdir=LR;")
+    println(io, "  node [fontname=\"Courier\", shape=box, style=rounded];")
 
-    dot = "digraph StateSpace {\n"
-    dot *= "  rankdir=LR;\n"
-    dot *= "  node [fontname=\"Courier\", shape=box, style=rounded];\n"
-
-    for s in 0:(num_states - 1)
-        if s in attractors
-            dot *= "  \"$(fmt_state(s))\" [style=\"rounded,filled\", fillcolor=\"#FFCDD2\", color=\"#D32F2F\", penwidth=2.0];\n"
+    for s in 0:(1 << N) - 1
+        if s in onattractor
+            println(io, "  \"$(fmt_state(s, N))\" [style=\"rounded,filled\", fillcolor=\"#FFCDD2\", color=\"#D32F2F\", penwidth=2.0];")
         else
-            dot *= "  \"$(fmt_state(s))\" [style=\"rounded,filled\", fillcolor=\"#F5F5F5\", color=\"#BDBDBD\"];\n"
+            println(io, "  \"$(fmt_state(s, N))\" [style=\"rounded,filled\", fillcolor=\"#F5F5F5\", color=\"#BDBDBD\"];")
         end
     end
 
-    for s in 0:(num_states - 1)
+    for s in 0:(1 << N) - 1
         ns = nextstate(s, net)
-        edge_color = (s in attractors && ns in attractors) ? "#D32F2F" : "#757575"
-        dot *= "  \"$(fmt_state(s))\" -> \"$(fmt_state(ns))\" [color=\"$edge_color\"];\n"
+        color = s in onattractor ? "#D32F2F" : "#757575"
+        println(io, "  \"$(fmt_state(s, N))\" -> \"$(fmt_state(ns, N))\" [color=\"$color\"];")
     end
 
-    dot *= "}\n"
-
-    return dot # Return raw String directly
+    println(io, "}")
+    return String(take!(io))
 end
 
 
-function save_graph(dot_str::String, filename="graph.png")
-    ext = splitext(filename)[2][2:end] # extracts "png" or "svg"
-    
-    # Pipe raw dot string to dot command
-    cmd = `dot -T$ext -o $filename`
-    open(cmd, "w", stdout) do io
+function save_graph(dot_str::String, filename::String="graph.png")
+    Sys.which("dot") === nothing &&
+        error("Graphviz `dot` not found. Install it (e.g. `sudo apt install graphviz`).")
+    ext = lstrip(splitext(filename)[2], '.')
+    dir = dirname(filename)
+    isempty(dir) || mkpath(dir)
+
+    open(`dot -T$ext -o $filename`, "w", stdout) do io
         print(io, dot_str)
     end
-    
     return filename
 end
 
 
-function analyze(net::BoolNet, savefile::String)
-    print(getbasins(net))
-    g = plot_topology(net)
-    s = plot_statediagram(net)
-    save_graph(g, "./img/$(savefile)_topology.png")
-    save_graph(s, "./img/$(savefile)_state_diagram.png")
+"""
+    analyze(net, name; outdir="img", maxN=10)
+
+Print the attractors of `net` and save its topology (and, if `N ≤ maxN`,
+its state diagram) as PNGs in `outdir`. Returns the attractor list.
+"""
+function analyze(net::BoolNet, name::String; outdir::String="img", maxN::Int=10)
+    N = length(net.inputs)
+    attractors = getattractors(net)
+
+    println("$(length(attractors)) attractor(s):")
+    for (cycle, basin) in attractors
+        println("  length $(length(cycle)), basin $basin: ", join(fmt_state.(cycle, N), " → "))
+    end
+
+    save_graph(plot_topology(net), joinpath(outdir, "$(name)_topology.png"))
+    if N <= maxN
+        save_graph(plot_statediagram(net; maxN), joinpath(outdir, "$(name)_state_diagram.png"))
+    else
+        @info "Skipping state diagram: N = $N > maxN = $maxN"
+    end
+    return attractors
 end
 
 end # module

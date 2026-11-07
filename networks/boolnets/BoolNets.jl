@@ -21,7 +21,7 @@ A Boolean network with N genes, numbered 1...N.
 
 # Example
 For the following Boolean Network:\n 
-`B = {{A, B, C}, {A' = !A or !B, B' = A and C, C' = !A and !B}}`
+`G = {{A, B, C}, {A' = !A or !B, B' = A and C, C' = !A and !B}}`
 The `BoolNet` struct will contain:\n
 - `inputs`: `[1,2], [1,3], [1,2]`
 - `tables`: `[[1,1,1,0], [0,0,0,1], [1,0,0,0]]`
@@ -77,7 +77,7 @@ function findcycle(state::Int, statefunc)
             cyclelength = step - t0
             cyclestates = states[t0+1:end]
             cycle = circshift(cyclestates, 1-argmin(cyclestates))
-            return (t0, cyclelength, cycle)
+            return (t0, cyclelength, cycle[1])
         else
             seen[state] = step 
             push!(states, state)
@@ -95,7 +95,7 @@ end
 Return a `Dict{Vector{Int}, {Int}}` containing attractors and their basin sized of `net` 
 """
 function getbasins(N::Int, f)
-    basins = Dict{Vector{Int}, Int}()
+    basins = Dict{Int, Int}()
     for k in 0:2^N-1
         _, _, c = findcycle(k, f)
         basins[c] = get(basins, c, 0) + 1
@@ -107,6 +107,8 @@ function getbasins(net::BoolNet)
     N = length(net.inputs)
     return getbasins(N, s->nextstate(s, net))
 end
+
+findbasins = getbasins # bind to the same func
 
 """
     randomnet(N, K, rng) -> BoolNet
@@ -324,3 +326,6 @@ function analyze(net::BoolNet, savefile::String)
 end
 
 end # module
+
+using .BoolNets
+

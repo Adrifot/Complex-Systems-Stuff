@@ -6,7 +6,7 @@ using JSON3
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
         plot_topology, plot_statediagram, save_graph, analyze,
-        getattractors
+        getattractors, savenet, loadnet
 
 """
     BoolNet(inputs, tables)

@@ -9,7 +9,7 @@ follow whatever this file says.
 A synchronous Boolean network with `N` genes. Every gene is either 0 or 1, and
 all genes update at the same time:
 
-```
+```pseudocode
 state(t+1)[i] = tables[i][ position of (values of inputs[i] in state(t)) ]
 ```
 
@@ -46,7 +46,7 @@ Each gene `i` has:
 3. `len(tables[i]) == 2^len(inputs[i])`
 4. every table entry is `0` or `1`
 
-## 3. Conventions (this is where bugs hide)
+## 3. Conventions
 
 ### Gene numbering
 
@@ -60,7 +60,7 @@ For gene `i`, read its inputs **in the order listed** and treat the values as
 the digits of a binary number. **The first listed input is the most
 significant bit.** The result is the **0-based** position in `tables[i]`.
 
-```
+```psuedocode
 pos = 0
 for j in inputs[i]:
     pos = 2 * pos + value_of_gene_j
@@ -94,7 +94,7 @@ For the network above, state 6 maps to state 7.
 ## 5. Reference networks and expected answers
 
 | network | N | attractors (canonical) | basin sizes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | K=1 toy: `A'=C, B'=A, C'=NOT B` | 3 | `[0,1,5,7,6,2]`, `[3,4]` | 6, 2 |
 | K=2 toy: `A'=A OR B, B'=A AND NOT C, C'=A AND B` | 3 | `[0]`, `[4,6,7,5]` | 2, 6 |
 

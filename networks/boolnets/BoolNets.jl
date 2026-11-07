@@ -63,7 +63,7 @@ end
 
 """
     getbasins(N, f) -> Dict{Int, Int}
-    getnasins(net) -> Dict{Int, Int}
+    getbasins(net) -> Dict{Int, Int}
 
 Get the basins of each attractor for a given boolean network `net`. Returns a dictionary with `AttractorID => BasinSize` entries.
 Runs in `O(2^N)` time. Consumes `O(2^N)` space. Mind the size of the boolean network.
@@ -190,7 +190,7 @@ end
 
 Generate an Erdos-Renyi-like boolean network with a desired average in-degree `k`
 """
-function erdos_renyi_k(N::Int, k::Float64, rng::AbstractRNG=Random.default_rng())
+function erdos_renyi_k(N::Int, k::Real, rng::AbstractRNG=Random.default_rng())
     p = k / N
     return erdos_renyi(N, p, rng)
 end
@@ -205,7 +205,8 @@ Then rewire each link with a probability of `p`.
 """
 function watts_strogatz(N::Int, k::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
     iseven(k) || throw(ArgumentError("Initial degree k must be even."))
-    0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability, It should be between 0 and 1."))
+    k < N || throw(ArgumentError("`k` has to be smaller than `N` in order to avoid duplicate links."))
+    0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability; it should be between 0 and 1."))
 
     # Initial ring lattice
     inputs = [Int[] for _ in 1:N]

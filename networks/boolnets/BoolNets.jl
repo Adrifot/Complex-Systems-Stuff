@@ -1,6 +1,7 @@
 module BoolNets
 
 using Random
+using JSON3
 
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
@@ -357,7 +358,62 @@ function analyze(net::BoolNet, name::String; outdir::String="img", maxN::Int=10)
     return attractors
 end
 
+"""
+    validnet(net::BoolNet) -> Bool
+
+Structural check: one table per gene, table length `2^K`, inputs are genes in `1:N`,
+table entries are 0 or 1.
+"""
+function validnet(net::BoolNet)
+    N = length(net.inputs)
+    length(net.tables) == N || return false
+    for i in 1:N
+        length(net.tables[i]) == 2^length(net.inputs[i]) || return false
+        all(g -> 1 <= g <= N, net.inputs[i]) || return false
+        all(b -> b == 0 || b == 1, net.tables[i]) || return false
+    end
+    return true
+end
+
+"""
+    savenet(path, net::BoolNet)
+
+Write `net` as JSON. Genes are numbered 1..N in the file.
+"""
+function savenet(path::AbstractString, net::BoolNet)
+    validnet(net) || throw(ArgumentError("refusing to save an invalid BoolNet"))
+    doc = (format = "boolnet", version = 1, n = length(net.inputs),
+           inputs = net.inputs, tables = net.tables)
+    open(path, "w") do io
+        JSON3.pretty(io, JSON3.write(doc))
+    end
+    return path
+end
+
+
+"""
+    loadnet(path) -> BoolNet
+
+Read a JSON file written by `savenet`. Throws `ArgumentError` for anything malformed.
+"""
+function loadnet(path::AbstractString)
+    obj = JSON3.read(read(path, String))
+    for key in (:format, :version, :n, :inputs, :tables)
+        haskey(obj, key) || throw(ArgumentError("missing field `$key`"))
+    end
+    obj.format == "boolnet" || throw(ArgumentError("not a boolnet file"))
+    obj.version == 1 || throw(ArgumentError("unsupported version $(obj.version)"))
+
+    inputs = [Vector{Int}(x) for x in obj.inputs]
+    tables = [Vector{Int}(x) for x in obj.tables]
+    obj.n == length(inputs) || throw(ArgumentError("`n` disagrees with `inputs`"))
+
+    net = BoolNet(inputs, tables)
+    validnet(net) || throw(ArgumentError("file describes an invalid network"))
+    return net
+end
+
 end # module
 
-using .BoolNets
+# using .BoolNets
 

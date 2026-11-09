@@ -134,16 +134,17 @@ end
 
 
 """
-    erdos_renyi(N, p, rng) -> BoolNet
-    erdos_renyi(N, m, rng) -> BoolNet
+    erdos_renyi(N, p, rng; force_selfloops=false) -> BoolNet
+    erdos_renyi(N, m, rng; force_selfloops=false) -> BoolNet
 
 Generate an Erdos-Renyi-like boolean network of `N` nodes with link probability `p`.
 OR 
 Generate an Erdos-Renyi-like boolean network of `N` nodes with `m` edges.
 
-Self-loops allowed.
+Self-loops will be created for each isolated node if `force_selfloops` is set to `true`.
+Naturally occuring self-loops are allowed.
 """
-function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
+function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng(); force_selfloops::Bool=false)
     0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability and should be between 0 and 1."))
 
     inputs = Vector{Vector{Int}}(undef, N)
@@ -151,7 +152,7 @@ function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
 
     for node in 1:N
         gene_inputs = [i for i in 1:N if rand(rng) < p]
-        if isempty(gene_inputs) gene_inputs = [node] end
+        force_selfloops && isempty(gene_inputs) && gene_inputs = [node] # if no connections, make self-loop
         inputs[node] = gene_inputs
         K = length(gene_inputs)
         tables[node] = rand(rng, 0:1, 1<<K)
@@ -160,7 +161,7 @@ function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng())
     return BoolNet(inputs, tables)
 end
 
-function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng())
+function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng(); force_selfloops::Bool=false)
     0 ≤ m ≤ N^2 || throw(ArgumentError("m is too big. With the provided N = $N, maximum value is m = $(N^2)"))
 
     inputs = Vector{Vector{Int}}(undef, N)
@@ -178,7 +179,7 @@ function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng())
     end
 
     for node in 1:N
-        isempty(inputs[node]) && push!(inputs[node], node) # if no connections, make self-loop
+        force_selfloops && isempty(inputs[node]) && push!(inputs[node], node) # if no connections, make self-loop
         sort!(inputs[node])
         K = length(inputs[node])
         tables[node] = rand(rng, 0:1, 1<<K)

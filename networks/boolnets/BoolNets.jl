@@ -6,7 +6,8 @@ using JSON3
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
         plot_topology, plot_statediagram, save_graph, analyze,
-        getattractors, savenet, loadnet
+        getattractors, savenet, loadnet,
+        kin, kout, avg_kin, avg_kout
 
 """
     BoolNet(inputs, tables)
@@ -411,6 +412,33 @@ function loadnet(path::AbstractString)
     net = BoolNet(inputs, tables)
     validnet(net) || throw(ArgumentError("file describes an invalid network"))
     return net
+end
+
+
+function kin(net::BoolNet)
+    kins = [length(ins) for ins in net.inputs]
+    return kins
+end
+
+function avg_kin(net::BoolNet) 
+    kins = kin(net)
+    return sum(kins) / length(kins) 
+end
+
+function kout(net::BoolNet)
+    N = length(net.inputs)
+    kouts = zeros(Int, N)
+    for input in net.inputs
+        for gene in input
+            kouts[gene] += 1
+        end
+    end
+    return kouts
+end
+
+function avg_kout(net::BoolNet)
+    kouts = kout(net)
+    return sum(kouts) / length(kouts)
 end
 
 end # module

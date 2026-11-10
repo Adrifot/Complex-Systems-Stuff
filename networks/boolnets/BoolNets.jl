@@ -6,7 +6,7 @@ using JSON3
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
         plot_topology, plot_statediagram, save_graph, analyze,
-        getattractors, savenet, loadnet,
+        getattractors, savenet, loadnet, validnet
         kin, kout, avg_kin, avg_kout
 
 """
@@ -71,6 +71,7 @@ Get the basins of each attractor for a given boolean network `net`. Returns a di
 Runs in `O(2^N)` time. Consumes `O(2^N)` space. Mind the size of the boolean network.
 """
 function getbasins(N::Int, f)
+    N > 25 && throw(ArgumentError("N is too big! This function will try to assign 2^$N Ints! Try again with an N ≤ 25"))
     v = zeros(Int, 1<<N)
     path = Int[]
 
@@ -152,7 +153,7 @@ function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng(); 
 
     for node in 1:N
         gene_inputs = [i for i in 1:N if rand(rng) < p]
-        force_selfloops && isempty(gene_inputs) && gene_inputs = [node] # if no connections, make self-loop
+        (force_selfloops && isempty(gene_inputs)) && (gene_inputs = [node]) # if no connections, make self-loop
         inputs[node] = gene_inputs
         K = length(gene_inputs)
         tables[node] = rand(rng, 0:1, 1<<K)
@@ -179,7 +180,7 @@ function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng(); forc
     end
 
     for node in 1:N
-        force_selfloops && isempty(inputs[node]) && push!(inputs[node], node) # if no connections, make self-loop
+        (force_selfloops && isempty(inputs[node])) && (push!(inputs[node], node)) # if no connections, make self-loop
         sort!(inputs[node])
         K = length(inputs[node])
         tables[node] = rand(rng, 0:1, 1<<K)
@@ -239,6 +240,7 @@ function watts_strogatz(N::Int, k::Int, p::Float64, rng::AbstractRNG=Random.defa
 
     return BoolNet(inputs, tables)
 end
+
 
 
 """

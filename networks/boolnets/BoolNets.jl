@@ -6,7 +6,7 @@ using JSON3
 export BoolNet, getbit, nextstate,  getbasins, 
         randomnet, erdos_renyi, erdos_renyi_k, watts_strogatz, 
         plot_topology, plot_statediagram, save_graph, analyze,
-        getattractors, savenet, loadnet, validnet
+        getattractors, savenet, loadnet, validnet,
         kin, kout, avg_kin, avg_kout
 
 """
@@ -40,7 +40,7 @@ end
 
 Get bit `pos` of `num`. Bit 0 is the least significant.
 """
-getbit(num, pos) = num>>pos %2
+getbit(num, pos) = (num>>pos)%2
 
 
 """

@@ -18,22 +18,23 @@ A Boolean network with N genes, numbered 1...N.
 - `inputs::Vector{Vector{Int}}`: the input dependencies of each gene.
     `inputs[i]` contains the genes that affect gene `i`. The **first**
     listed input is the most significant bit of the boolean table position.
-- `tables::Vector{Vector{Int}}`: truth tables for each gene.
-    `tables[i]` contains `2^K` output bits for gene `i` ordered
-    by position in the truth table.
+- `tables::Vector{BitVector}`: truth tables for each gene stored compactly as
+    bits instead of boxed integers.
 
 # Example
 For the following Boolean Network:\n 
 `G = {{A, B, C}, {A' = !A or !B, B' = A and C, C' = !A and !B}}`
 The `BoolNet` struct will contain:\n
 - `inputs`: `[1,2], [1,3], [1,2]`
-- `tables`: `[[1,1,1,0], [0,0,0,1], [1,0,0,0]]`
+- `tables`: `BitVector([1,1,1,0]), BitVector([0,0,0,1]), BitVector([1,0,0,0])`
 """
 struct BoolNet
     inputs::Vector{Vector{Int}}
-    tables::Vector{Vector{Int}}
+    tables::Vector{BitVector}
 end
 
+# Compatibility constructor
+BoolNet(inputs::Vector{Vector{Int}}, tables::Vector{Vector{Int}}) = BoolNet(inputs, [BitVector([Bool(x) for x in table]) for table in tables])
 
 """
     getbit(num::Int, pos::Int)
@@ -58,7 +59,7 @@ function nextstate(state::Int, net::BoolNet)
             pos += getbit(state, N - i) * 1<<pow
             pow -= 1
         end
-        res += net.tables[gene][pos] * 2^(N - gene)
+        res += Int(net.tables[gene][pos]) * 2^(N - gene)
     end
     return res
 end
@@ -120,14 +121,14 @@ function randomnet(N::Int, K::Int, rng::AbstractRNG=Random.default_rng())
     1 ≤ K ≤ N || throw(ArgumentError("K must be between 1 and N"))
 
     inputs = Vector{Vector{Int}}(undef, N)
-    tables = Vector{Vector{Int}}(undef, N)
+    tables = Vector{BitVector}(undef, N)
 
     num_entries = 1 << K # = 2^K
 
     for i in 1:N 
         # Randomly choose K distinct genes and populate the truth table
         inputs[i] = randperm(rng, N)[1:K]
-        tables[i] = rand(rng, 0:1, num_entries)
+        tables[i] = BitVector(rand(rng, Bool, num_entries))
     end
 
     return BoolNet(inputs, tables)
@@ -149,14 +150,14 @@ function erdos_renyi(N::Int, p::Float64, rng::AbstractRNG=Random.default_rng(); 
     0.0 ≤ p ≤ 1.0 || throw(ArgumentError("p is a probability and should be between 0 and 1."))
 
     inputs = Vector{Vector{Int}}(undef, N)
-    tables = Vector{Vector{Int}}(undef, N)
+    tables = Vector{BitVector}(undef, N)
 
     for node in 1:N
         gene_inputs = [i for i in 1:N if rand(rng) < p]
         (force_selfloops && isempty(gene_inputs)) && (gene_inputs = [node]) # if no connections, make self-loop
         inputs[node] = gene_inputs
         K = length(gene_inputs)
-        tables[node] = rand(rng, 0:1, 1<<K)
+        tables[node] = BitVector(rand(rng, Bool, 1<<K))
     end
 
     return BoolNet(inputs, tables)
@@ -165,11 +166,8 @@ end
 function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng(); force_selfloops::Bool=false)
     0 ≤ m ≤ N^2 || throw(ArgumentError("m is too big. With the provided N = $N, maximum value is m = $(N^2)"))
 
-    inputs = Vector{Vector{Int}}(undef, N)
-    tables = Vector{Vector{Int}}(undef, N)
-
     inputs = [Int[] for _ in 1:N]
-    tables = Vector{Vector{Int}}(undef, N)
+    tables = Vector{BitVector}(undef, N)
 
     # pick m distinct edges out of the N^2 possible ones
     for idx in Random.randperm(rng, N^2)[1:m]
@@ -183,7 +181,7 @@ function erdos_renyi(N::Int, m::Int, rng::AbstractRNG=Random.default_rng(); forc
         (force_selfloops && isempty(inputs[node])) && (push!(inputs[node], node)) # if no connections, make self-loop
         sort!(inputs[node])
         K = length(inputs[node])
-        tables[node] = rand(rng, 0:1, 1<<K)
+        tables[node] = BitVector(rand(rng, Bool, 1<<K))
     end
     return BoolNet(inputs, tables)
 end
@@ -236,7 +234,7 @@ function watts_strogatz(N::Int, k::Int, p::Float64, rng::AbstractRNG=Random.defa
     end
 
     # Generate truth tables
-    tables = [rand(rng, 0:1, 1 << length(inputs[i])) for i in 1:N]
+    tables = [BitVector(rand(rng, Bool, 1 << length(inputs[i]))) for i in 1:N]
 
     return BoolNet(inputs, tables)
 end
@@ -366,15 +364,14 @@ end
     validnet(net::BoolNet) -> Bool
 
 Structural check: one table per gene, table length `2^K`, inputs are genes in `1:N`,
-table entries are 0 or 1.
+bit values are valid.
 """
 function validnet(net::BoolNet)
     N = length(net.inputs)
     length(net.tables) == N || return false
     for i in 1:N
         length(net.tables[i]) == 2^length(net.inputs[i]) || return false
-        all(g -> 1 <= g <= N, net.inputs[i]) || return false
-        all(b -> b == 0 || b == 1, net.tables[i]) || return false
+        all(b -> b isa Bool, net.tables[i]) || return false
     end
     return true
 end
@@ -387,7 +384,7 @@ Write `net` as JSON. Genes are numbered 1..N in the file.
 function savenet(path::AbstractString, net::BoolNet)
     validnet(net) || throw(ArgumentError("refusing to save an invalid BoolNet"))
     doc = (format = "boolnet", version = 1, n = length(net.inputs),
-           inputs = net.inputs, tables = net.tables)
+           inputs = net.inputs, tables = [Int.(table) for table in net.tables])
     open(path, "w") do io
         JSON3.pretty(io, JSON3.write(doc))
     end
@@ -409,7 +406,7 @@ function loadnet(path::AbstractString)
     obj.version == 1 || throw(ArgumentError("unsupported version $(obj.version)"))
 
     inputs = [Vector{Int}(x) for x in obj.inputs]
-    tables = [Vector{Int}(x) for x in obj.tables]
+    tables = [BitVector([Bool(Int(b)) for b in x]) for x in obj.tables]
     obj.n == length(inputs) || throw(ArgumentError("`n` disagrees with `inputs`"))
 
     net = BoolNet(inputs, tables)
